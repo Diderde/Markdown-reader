@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """轻量语法高亮 tokenizer：移植自 JS 版，粘性正则 → Python 的 match(src, pos)。"""
 
 from __future__ import annotations

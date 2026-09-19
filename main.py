@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Markdown Reader —— 桌面与移动端自适应。
 
 - 宽屏（≥900px）：源码 | 预览 双栏；窄屏：编辑 / 预览 两个标签页

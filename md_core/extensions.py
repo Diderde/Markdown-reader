@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """行内扩展注册表：与 JS 版 MdReader.use({ marker, parse }) 等价。
 
 内置演示扩展：==高亮==。

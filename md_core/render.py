@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """渲染器：把块级/行内节点树转换为 Flet 控件（深色主题，配色对齐 HTML 版）。"""
 
 from __future__ import annotations

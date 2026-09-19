@@ -60,4 +60,6 @@ markdown-reader/
 
 ## 许可
 
+Copyright © 2026 Diderde
+
 本项目以 [GPL-2.0-or-later](LICENSE) 许可开源：修改后再分发的版本须同样以 GPL-2.0-or-later 开源并保留版权声明。

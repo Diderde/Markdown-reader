@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """块级解析器：移植自 JS 版 lex / lexList，单遍行扫描 + 有界递归。"""
 
 from __future__ import annotations

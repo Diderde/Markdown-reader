@@ -35,4 +35,6 @@ python -m venv .venv
 
 ## License
 
+Copyright © 2026 Diderde
+
 This project is open source under [GPL-2.0-or-later](LICENSE): redistributed derivatives must likewise be licensed GPL-2.0-or-later with the copyright notice intact.

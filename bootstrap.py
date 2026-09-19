@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Markdown Reader 环境自举（Windows，仅标准库）。
 
 流程（run.bat → 本脚本）：
