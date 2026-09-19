@@ -19,6 +19,26 @@ python -m venv .venv
 - **Web**: `flet run --web` — open the URL on your phone (same LAN) for the mobile layout;
 - **Mobile**: `flet run --android` / `--ios` (requires Flet CLI), or package an APK.
 
+## SSH tunnel access (optional, encrypted)
+
+Prefer not to expose a port on the LAN? Have the app listen on loopback only and reach it from your phone through an SSH tunnel:
+
+1. Install the OpenSSH server on the PC (elevated PowerShell, one-time):
+   ```powershell
+   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
+   Start-Service sshd
+   Set-Service sshd StartupType Automatic
+   New-NetFirewallRule -Name sshd-in -DisplayName 'OpenSSH Server' -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow
+   ```
+2. Run `run-web.bat` (binds to `127.0.0.1:8550`, never exposed to the LAN);
+3. On the phone, open the tunnel (Termux directly; Termius via Port Forwarding):
+   ```
+   ssh -N -L 8550:127.0.0.1:8550 user@<pc-ip>
+   ```
+4. Open `http://127.0.0.1:8550` in the phone's browser.
+
+Traffic is encrypted end-to-end by SSH; the browser talks to the phone's own loopback, so no TLS certificate is needed.
+
 ## Features
 
 - Wide screens (≥900px): source | preview panes; narrow screens: "source / preview" tabs
