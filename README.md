@@ -25,29 +25,7 @@ python -m venv .venv
 - **Web**：`flet run --web`，浏览器访问（手机浏览器即移动端布局）；
 - **移动端**：`flet run --android` / `--ios`（需 Flet CLI），或打包后安装。
 
-## SSH 隧道访问（可选，加密）
-
-不想把端口暴露到局域网？让程序只监听本机回环，手机经 SSH 隧道访问：
-
-1. 电脑安装 OpenSSH 服务器（管理员 PowerShell，一次性）：
-
-   ```powershell
-   Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0
-   Start-Service sshd
-   Set-Service sshd StartupType Automatic
-   New-NetFirewallRule -Name sshd-in -DisplayName 'OpenSSH Server' -Direction Inbound -Protocol TCP -LocalPort 22 -Action Allow
-   ```
-
-2. 运行 `run-web.bat`（只绑定 `127.0.0.1:8550`，不暴露局域网）；
-3. 手机端建立隧道（Termux 直接执行；Termius 在 Port Forwarding 里配置）：
-
-   ```
-   ssh -N -L 8550:127.0.0.1:8550 用户名@电脑IP
-   ```
-
-4. 手机浏览器打开 `http://127.0.0.1:8550`。
-
-流量全程经 SSH 加密；浏览器访问的是手机本机回环地址，因此无需配置 TLS 证书。
+## 功能
 
 ## 功能
 
