@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "markdown-reader-flet"
+version = "1.0.0"
+description = "Markdown Reader：桌面与移动端自适应，双栏编辑/预览，实时渲染"
+readme = "README.md"
+license = "GPL-2.0-or-later"
+license-files = ["LICENSE"]
+authors = [{ name = "Diderde" }]
+requires-python = ">=3.10"
+dependencies = [
+    "flet>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.6",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint.per-file-ignores]
+# 自举脚本刻意保守：按返回码分支（subprocess 不用 check）；
+# winreg 嵌套 with 保持逐键缩进可读性。
+"bootstrap.py" = ["PLW1510", "SIM117"]
