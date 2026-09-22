@@ -7,7 +7,6 @@ A Markdown reader with side-by-side editing and live rendering, adaptive for des
 ## Run
 
 ```powershell
-cd markdown-reader
 python -m venv .venv
 .venv\Scripts\pip install -e .
 .venv\Scripts\python main.py        # desktop window

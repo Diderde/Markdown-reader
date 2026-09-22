@@ -13,7 +13,6 @@
 ## 运行
 
 ```powershell
-cd markdown-reader
 python -m venv .venv
 .venv\Scripts\pip install -e .
 .venv\Scripts\python main.py        # 桌面窗口
@@ -24,8 +23,6 @@ python -m venv .venv
 - **桌面**：直接 `python main.py`（或 `flet run`）；
 - **Web**：`flet run --web`，浏览器访问（手机浏览器即移动端布局）；
 - **移动端**：`flet run --android` / `--ios`（需 Flet CLI），或打包后安装。
-
-## 功能
 
 ## 功能
 
@@ -43,7 +40,7 @@ python -m venv .venv
 ## 项目结构
 
 ```
-markdown-reader/
+Markdown-reader/
 ├── main.py              # Flet 应用外壳（布局/防抖/文件导入/状态栏）
 ├── md_core/
 │   ├── inline.py        # 行内解析（flanking、三的倍数规则、扩展注册）
