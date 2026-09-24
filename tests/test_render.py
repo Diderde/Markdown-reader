@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Diderde
+# SPDX-License-Identifier: GPL-2.0-or-later
 """渲染器测试：仅构造控件（不创建窗口），验证结构与参数传递。"""
 
 from __future__ import annotations

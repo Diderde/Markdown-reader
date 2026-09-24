@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Diderde
 # SPDX-License-Identifier: GPL-2.0-or-later
 """Markdown Reader —— 桌面与移动端自适应。
 

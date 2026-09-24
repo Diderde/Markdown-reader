@@ -1,6 +1,10 @@
+# Copyright (C) 2026 Diderde
+# SPDX-License-Identifier: GPL-2.0-or-later
 """md_core 解析核心的单元测试（不依赖 Flet，不访问网络）。"""
 
 from __future__ import annotations
+
+import time
 
 from md_core.blocks import lex, match_list, match_refdef, split_row
 from md_core.extensions import REGISTRY
@@ -215,3 +219,33 @@ class TestBoundedness:
     def test_emphasis_window_bounded(self):
         src = "*" + "a" * 200000
         parse_inline(src, make_ctx())  # 有界窗口，正常返回
+
+    def test_long_tilde_run_bounded(self):
+        """修复验证：长 `~` 串下旧实现每消费 4 字符就重扫剩余整段（20k 字符约 10s）。"""
+        src = "a" + "~" * 20000
+        start = time.perf_counter()
+        nodes = parse_inline(src, make_ctx())
+        assert time.perf_counter() - start < 2.0   # 修复后约 25ms，留足 CI 容差
+        assert len(nodes) == 5001                  # 语义不变：每 4 个 ~ 生成一个删除线节点
+
+    def test_unclosed_brackets_bounded(self):
+        """修复验证：`[` 风暴下旧实现逐字符扫描 2048 窗口（100k 字符约 6s）。"""
+        src = "[" * 100000
+        start = time.perf_counter()
+        nodes = parse_inline(src, make_ctx())
+        assert time.perf_counter() - start < 2.0   # 修复后约 60ms
+        assert "".join(texts(nodes)) == src        # 未闭合方括号保持字面量
+
+    def test_scan_budget_degrades_marker_storm(self):
+        """修复验证：标记密集输入由文档级扫描预算兜底（旧实现 9.9 万字符超 60s）。"""
+        ctx = make_ctx()
+        start = time.perf_counter()
+        parse_inline("*a " * 20000, ctx)
+        assert time.perf_counter() - start < 3.0
+        assert ctx.scan_left <= 0                  # 预算耗尽 → 剩余内容按纯文本降级
+
+    def test_scan_budget_untouched_for_normal_text(self):
+        """反向守护：正常文档不得触发降级（否则等于静默丢失格式）。"""
+        ctx = make_ctx()
+        parse_inline("正常段落 **加粗** 与 `代码`、[链接](https://e.example)。\n\n第二段。", ctx)
+        assert ctx.scan_left > 0

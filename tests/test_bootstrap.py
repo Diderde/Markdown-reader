@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Diderde
+# SPDX-License-Identifier: GPL-2.0-or-later
 """bootstrap.py 环境自举的单元测试（SSRF 校验、用户询问与主流程，不联网）。"""
 
 from __future__ import annotations

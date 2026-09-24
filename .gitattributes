@@ -1,0 +1,6 @@
+# 行尾策略（AGENTS.md §1）：文本文件统一 LF；与平台无关，CI 在 Linux 上跑。
+* text=auto eol=lf
+
+# Windows 批处理必须 CRLF：LF 行尾的 .bat 在部分 cmd 版本下 goto/label 会出错。
+*.bat text eol=crlf
+*.cmd text eol=crlf

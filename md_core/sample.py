@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Diderde
 # SPDX-License-Identifier: GPL-2.0-or-later
 """示例文档与占位图（纯 stdlib 生成 PNG，Flet 可直接渲染 base64 图片）。"""
 

@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Diderde
+# SPDX-License-Identifier: GPL-2.0-or-later
 """md_core.netinfo 局域网探测的单元测试（纯本地，不发网络包）。"""
 
 from __future__ import annotations

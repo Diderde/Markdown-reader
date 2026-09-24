@@ -1,3 +1,5 @@
+# Copyright (C) 2026 Diderde
+# SPDX-License-Identifier: GPL-2.0-or-later
 """文档节点定义：行内节点与块级节点（与 JS 版 typedef 一一对应）。"""
 
 from __future__ import annotations

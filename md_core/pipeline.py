@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Diderde
 # SPDX-License-Identifier: GPL-2.0-or-later
 """渲染流水线：清洗 → 引用预扫描 → 块级 lex → 统计与计时。"""
 

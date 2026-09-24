@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Diderde
 # SPDX-License-Identifier: GPL-2.0-or-later
 """md_core —— Markdown 解析核心（解析层纯逻辑、不依赖 Flet，可独立单测）。
 

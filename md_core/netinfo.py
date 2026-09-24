@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Diderde
 # SPDX-License-Identifier: GPL-2.0-or-later
 """局域网地址探测：纯本地枚举本机网卡 IPv4，不发起任何网络请求。"""
 

@@ -1,3 +1,4 @@
+# Copyright (C) 2026 Diderde
 # SPDX-License-Identifier: GPL-2.0-or-later
 """行内解析器：移植自 JS 版 parseInline，含 flanking 判定与“三的倍数”规则。
 
