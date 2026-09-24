@@ -1,5 +1,5 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions EnableDelayedExpansion
 chcp 65001 >nul
 cd /d "%~dp0"
 title Markdown Reader - 环境检查与依赖安装
@@ -30,21 +30,21 @@ rem bootstrap.py re-scans all usable Pythons itself before creating the venv.
 where py.exe >nul 2>nul
 if not errorlevel 1 (
     py -3 "%BOOTSTRAP%" %*
-    set "RC=%ERRORLEVEL%"
+    set "RC=!ERRORLEVEL!"
     goto :finish
 )
 
 where python.exe >nul 2>nul
 if not errorlevel 1 (
     python "%BOOTSTRAP%" %*
-    set "RC=%ERRORLEVEL%"
+    set "RC=!ERRORLEVEL!"
     goto :finish
 )
 
 where python3.exe >nul 2>nul
 if not errorlevel 1 (
     python3 "%BOOTSTRAP%" %*
-    set "RC=%ERRORLEVEL%"
+    set "RC=!ERRORLEVEL!"
     goto :finish
 )
 
@@ -65,7 +65,7 @@ for %%P in (
 ) do (
     if exist "%%~P" (
         "%%~P" "%BOOTSTRAP%" %*
-        set "RC=%ERRORLEVEL%"
+        set "RC=!ERRORLEVEL!"
         goto :finish
     )
 )

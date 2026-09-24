@@ -9,6 +9,13 @@ import pytest
 import bootstrap
 
 
+@pytest.fixture(autouse=True)
+def isolate_bootstrap_root(tmp_path, monkeypatch):
+    """所有用例都在临时目录里跑：否则 write() 会把 environment_report.txt 写进仓库根。"""
+    monkeypatch.setattr(bootstrap, "ROOT", tmp_path)
+    monkeypatch.setattr(bootstrap, "VENV", tmp_path / ".venv")
+
+
 class TestValidatePublicHttps:
     def test_accepts_official_pypa_url(self):
         url = "https://bootstrap.pypa.io/get-pip.py"

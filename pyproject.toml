@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "markdown-reader-flet"
-version = "1.0.0"
+version = "1.0.1"
 description = "Markdown Reader：桌面与移动端自适应，双栏编辑/预览，实时渲染"
 readme = "README.md"
 license = "GPL-2.0-or-later"

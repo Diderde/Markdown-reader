@@ -52,8 +52,14 @@ MAX_IMAGE_WIDTH = 560
 
 
 def safe_url(u: str, kind: str) -> str:
-    """URL 协议白名单：链接仅 http/https/mailto 与相对地址；图片另允许 data:image。"""
+    """URL 协议白名单：链接仅 http/https/mailto 与相对地址；图片另允许 data:image。
+
+    含 C0 控制字符与空白的 URL 一律拒绝：浏览器会在解析前剥掉这些字符，
+    于是 `\\x01javascript:` 会被当作 `javascript:` 执行，而本项目支持手机浏览器访问预览。
+    """
     if not u:
+        return ""
+    if any(ord(c) <= 0x20 or ord(c) == 0x7F for c in u):
         return ""
     m = _SCHEME_RE.match(u)
     if not m:

@@ -61,10 +61,19 @@ def is_right_flanking(before: str, after: str) -> bool:
 
 
 def count_run(s: str, i: int, ch: str) -> int:
-    n = 0
-    while i + n < len(s) and s[i + n] == ch:
-        n += 1
-    return n
+    """统计 s[i:] 开头连续 ch 的个数。
+
+    逐字符 Python 循环在病态长 run（如 2 万个 `~`）下会退化成二次方；
+    这里改用 C 层正则匹配，且不做 s[i:] 切片（切片会整段拷贝，反而是新的二次方来源）。
+    """
+    if i >= len(s) or s[i] != ch:
+        return 0
+    rx = _RUN_RES.get(ch)
+    if rx is None:
+        rx = re.compile(re.escape(ch) + "+")
+        _RUN_RES[ch] = rx
+    m = rx.match(s, i)
+    return m.end() - i
 
 
 def indent_of(line: str) -> int:
@@ -78,23 +87,36 @@ def indent_of(line: str) -> int:
 
 SPECIALS = set("`\\*_[!<~\n")
 ESCAPABLES = set('\\`!"#$%&\'()*+,-./:;<=>?@[\\]^_{|}~')
+# 与 SPECIALS 等价的字符类：C 层跳扫用（逐字符 Python 循环在长文本上是热点）
+SPECIAL_RE = re.compile("[`\\\\*_\\[!<~\\n]")
+# 窗口扫描用正则缓存：只有 `\`、`` ` `` 与当前标记需要进入分支处理
+_SCAN_RES: dict[str, re.Pattern] = {}
+# 连续字符 run 的计数正则缓存（见 count_run）
+_RUN_RES: dict[str, re.Pattern] = {}
+
+
+def scan_re(ch: str) -> re.Pattern:
+    """返回本标记的窗口扫描正则（命中反斜杠 / 反引号 / 标记本身才有必要进入分支）。"""
+    rx = _SCAN_RES.get(ch)
+    if rx is None:
+        rx = re.compile("[\\\\`" + re.escape(ch) + "]")
+        _SCAN_RES[ch] = rx
+    return rx
 
 
 def next_special(src: str, from_: int, limit: int) -> int:
     """在 [from_, limit) 内找下一个特殊字符位置；找不到返回 -1。"""
-    for k in range(from_, min(len(src), limit)):
-        if src[k] in SPECIALS:
-            return k
-    return -1
+    m = SPECIAL_RE.search(src, from_, min(len(src), limit))
+    return m.start() if m else -1
 
 
 def index_of_capped(src: str, ch: str, from_: int, cap: int) -> int:
-    """在 [from_, from_+cap) 内查找字符 ch；有界，避免全串 O(n) 扫描。"""
+    """在 [from_, from_+cap) 内查找字符 ch；有界，避免全串 O(n) 扫描。
+
+    用 str.find 在 C 层查找：逐字符 Python 循环在 `[` 风暴（10 万未闭合方括号）下是主要热点。
+    """
     end = min(len(src), from_ + cap)
-    for k in range(from_, end):
-        if src[k] == ch:
-            return k
-    return -1
+    return src.find(ch, from_, end)
 
 
 def find_closing_run(src: str, from_: int, run: int, limit: int) -> int:
@@ -126,6 +148,7 @@ class Hit:
 class InlineCtx:
     refs: dict            # 链接引用定义 id -> {url, title}
     exts: list            # 自定义行内扩展（见 extensions 注册）
+    scan_left: int = -1   # 本文档剩余的窗口扫描预算（候选步数）；-1 表示尚未初始化
 
 
 def try_emphasis(src: str, i: int, ctx: InlineCtx) -> Hit | None:
@@ -152,6 +175,9 @@ def _try_emphasis_len(src: str, i: int, ch: str, run: int, length: int, ctx: Inl
 
     j = i + run
     while j < limit:
+        ctx.scan_left -= 1
+        if ctx.scan_left <= 0:
+            return None                   # 预算耗尽：放弃本次匹配，由主循环按纯文本降级
         c = src[j]
         if c == "\\":
             j += 2
@@ -184,7 +210,8 @@ def _try_emphasis_len(src: str, i: int, ch: str, run: int, length: int, ctx: Inl
                     return Hit(Emphasis(kind, parse_inline(inner, ctx)), j + min(r, length))
             j += r
             continue
-        j += 1
+        m = scan_re(ch).search(src, j + 1, limit)   # C 层跳到下一个有意义字符
+        j = m.start() if m else limit
     return None
 
 
@@ -200,8 +227,8 @@ def try_code_span(src: str, i: int) -> Hit | None:
 
 
 def try_strike(src: str, i: int, ctx: InlineCtx) -> Hit | None:
-    run = count_run(src, i, "~")
-    if run < 2:
+    # run 的量值在这里只用于判「是否 ≥2」，故用 O(1) 相邻判定替代对整段 run 的计数
+    if i + 1 >= len(src) or src[i + 1] != "~":
         return None
     after = src[i + 2] if i + 2 < len(src) else ""
     if not after or is_whitespace(after):
@@ -209,6 +236,9 @@ def try_strike(src: str, i: int, ctx: InlineCtx) -> Hit | None:
     limit = min(len(src), i + MAX_EM_SCAN)
     j = i + 2
     while j < limit:
+        ctx.scan_left -= 1
+        if ctx.scan_left <= 0:
+            return None                   # 预算耗尽：放弃本次匹配，由主循环按纯文本降级
         c = src[j]
         if c == "\\":
             j += 2
@@ -226,7 +256,8 @@ def try_strike(src: str, i: int, ctx: InlineCtx) -> Hit | None:
                 return Hit(Emphasis("del", parse_inline(src[i + 2:j], ctx)), j + 2)
             j += r
             continue
-        j += 1
+        m = scan_re("~").search(src, j + 1, limit)  # C 层跳到下一个有意义字符
+        j = m.start() if m else limit
     return None
 
 
@@ -332,7 +363,11 @@ def try_link(src: str, i: int, ctx: InlineCtx, image: bool) -> Hit | None:
 
 
 def parse_inline(src: str, ctx: InlineCtx) -> list:
-    """行内解析主循环：单遍扫描 + 文本段跳跃 + 迭代预算防死循环。"""
+    """行内解析主循环：单遍扫描 + 文本段跳跃 + 迭代预算 + 扫描预算防死循环。
+
+    `ctx.scan_left` 是整个文档共享的窗口扫描预算；耗尽后剩余内容按纯文本输出（有界降级），
+    使标记密集的病态输入（如 `'*a '` 重复数万次）不会无限期占用解析线程。
+    """
     parts: list = []
     text: list[str] = []
 
@@ -347,12 +382,19 @@ def parse_inline(src: str, ctx: InlineCtx) -> list:
 
     budget = len(src) * 2 + 64
     iterations = 0
+    if ctx.scan_left < 0:                 # 每个文档一份，递归调用共享（仅首层初始化）
+        ctx.scan_left = max(50_000, min(len(src) * 4, 500_000))
     i = 0
     n = len(src)
     while i < n:
         iterations += 1
         if iterations > budget:
             raise RuntimeError("行内解析超出迭代预算（疑似未消费字符路径）")
+
+        if ctx.scan_left <= 0:            # 扫描预算耗尽：剩余内容按纯文本输出（有界降级）
+            text.append(src[i:])
+            i = n
+            continue
         c = src[i]
 
         # 1) 扩展语法（先于内建规则）

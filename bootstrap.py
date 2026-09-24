@@ -28,7 +28,7 @@ from urllib.parse import urlparse
 
 MIN_VERSION = (3, 10)
 GET_PIP_URL = "https://bootstrap.pypa.io/get-pip.py"
-RUNTIME_DEP = "flet>=1.0"
+RUNTIME_DEP = "flet[desktop]>=1.0"   # 桌面运行期显式声明，避免首次启动时联网自装
 APP_ENTRY = "main.py"
 
 # 下载主机白名单：get-pip.py 只允许来自 PyPA 官方域
@@ -36,8 +36,12 @@ ALLOWED_DOWNLOAD_HOSTS = {"bootstrap.pypa.io", "pypi.org", "files.pythonhosted.o
 
 ROOT = Path(__file__).resolve().parent
 VENV = ROOT / ".venv"
-REPORT = ROOT / "environment_report.txt"
 LOG: list[str] = []
+
+
+def report_path() -> Path:
+    """报告落点按当前 ROOT 派生：导入期绑定会让测试写到仓库根，覆盖真实报告。"""
+    return Path(ROOT) / "environment_report.txt"
 
 
 def write(message=""):
@@ -45,7 +49,7 @@ def write(message=""):
     print(text, flush=True)
     LOG.append(text)
     with contextlib.suppress(OSError):
-        REPORT.write_text("\n".join(LOG) + "\n", encoding="utf-8")
+        report_path().write_text("\n".join(LOG) + "\n", encoding="utf-8")
 
 
 def run_step(command, timeout=600):
@@ -68,28 +72,39 @@ def run_step(command, timeout=600):
 
 
 def validate_public_https(url: str) -> str:
-    """SSRF 防护：仅允许 https、主机在白名单内、且解析结果不是受限地址。"""
+    """SSRF 防护：仅允许 https 且默认端口、主机在白名单内、解析结果**全部**是公网地址。"""
     parsed = urlparse(url)
     if parsed.scheme != "https":
         raise ValueError(f"仅允许 https 下载地址：{url}")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError(f"下载地址端口非法：{url}") from exc
+    if port not in (None, 443):
+        raise ValueError(f"仅允许默认 https 端口（443）：{url}")
     host = (parsed.hostname or "").lower()
     if not host or host == "localhost" or host.endswith(".local"):
         raise ValueError(f"拒绝受限主机：{host}")
     if host not in ALLOWED_DOWNLOAD_HOSTS:
         raise ValueError(f"主机不在下载白名单内：{host}")
     try:
-        addr_infos = socket.getaddrinfo(host, 443, proto=socket.IPPROTO_TCP)
+        addr_infos = socket.getaddrinfo(host, port or 443, proto=socket.IPPROTO_TCP)
     except OSError as exc:
         raise ValueError(f"主机解析失败：{host}（{exc}）") from exc
     for info in addr_infos:
-        ip = ipaddress.ip_address(info[4][0])
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError as exc:
+            raise ValueError(f"下载主机解析到非法地址：{host} -> {info[4][0]}") from exc
         if (
-            ip.is_loopback
+            not ip.is_global          # 正向判定：只放行公网（覆盖 CGNAT 等黑名单漏项）
+            or ip.is_loopback
             or ip.is_private
             or ip.is_reserved
             or ip.is_link_local
             or ip.is_multicast
             or ip.is_unspecified
+            or getattr(ip, "is_site_local", False)   # IPv6 site-local（fec0::/10）不在 is_global 覆盖内
         ):
             raise ValueError(f"下载主机解析到受限网络地址：{host} -> {ip}")
     return url
@@ -300,10 +315,11 @@ def _version_at_least(version_text: str, minimum: tuple[int, ...]) -> bool:
 
 
 def imports_ok(python) -> tuple[bool, str]:
-    """检查 flet 是否可导入且版本 >= 1.0（应用使用 Flet 1.0 API）。"""
+    """检查 flet 是否真的可导入且版本 >= 1.0（只查元数据会把残缺安装误判为可用）。"""
     try:
         result = subprocess.run(
-            [str(python), "-I", "-c", "import importlib.metadata as m; print('OK', m.version('flet'))"],
+            [str(python), "-I", "-c",
+             "import importlib.metadata as m, flet; print('OK', m.version('flet'))"],
             cwd=str(ROOT),
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -371,14 +387,35 @@ def report_environment(dep_report: dict) -> None:
     write("  flet          : {}".format(version if version else "缺失"))
 
 
+def find_curl() -> str:
+    """定位系统 curl.exe：优先 System32 绝对路径，拒绝 PATH 上的相对结果（当前目录劫持）。"""
+    candidates = [Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "curl.exe"]
+    found = shutil.which("curl")
+    if found:
+        candidates.append(Path(found))
+    for item in candidates:
+        if item.is_absolute() and item.is_file():
+            return str(item)
+    return ""
+
+
 def download_get_pip(target: Path) -> None:
-    """从 PyPA 官方固定地址下载 get-pip.py（先做 SSRF 校验，再交 curl 下载）。"""
+    """从 PyPA 官方固定地址下载 get-pip.py：先 SSRF 校验，再交 curl（仅 https，且复核落点主机）。"""
     validate_public_https(GET_PIP_URL)
-    curl = shutil.which("curl")
+    curl = find_curl()
     if not curl:
         raise RuntimeError("系统缺少 curl.exe（Windows 10 1803+ 自带），无法下载 get-pip.py")
-    if run_step([curl, "-fsSL", "--retry", "3", "-o", str(target), GET_PIP_URL], 300).returncode != 0:
+    result = run_step(
+        [curl, "-fsSL", "--retry", "3",
+         "--proto", "=https", "--proto-redir", "=https",   # 禁止重定向降级到明文 http
+         "-w", "%{url_effective}", "-o", str(target), GET_PIP_URL],
+        300,
+    )
+    if result.returncode != 0:
         raise RuntimeError("get-pip.py 下载失败")
+    landing = (getattr(result, "stdout", "") or "").strip().splitlines()
+    if landing and landing[-1].strip().startswith(("http://", "https://")):
+        validate_public_https(landing[-1].strip())        # 重定向后的落点必须仍在白名单内
 
 
 def install_pip(python) -> None:
@@ -404,19 +441,37 @@ def install_pip(python) -> None:
 
 
 def prepare_with(base_python) -> Path:
-    """用指定基础解释器创建 .venv 并安装运行依赖，返回 venv 解释器。"""
-    if VENV.exists():
-        shutil.rmtree(str(VENV), ignore_errors=False)
-    if run_step([base_python, "-m", "venv", str(VENV)], 300).returncode != 0:
-        raise RuntimeError("创建 .venv 失败")
-    runtime = venv_python()
-    install_pip(runtime)
-    run_step([runtime, "-m", "pip", "install", "-U", "pip"], 900)
-    if run_step([runtime, "-m", "pip", "install", "-U", RUNTIME_DEP], 1800).returncode != 0:
-        raise RuntimeError("安装 flet 失败")
-    ok, details = imports_ok(runtime)
-    if not ok:
-        raise RuntimeError(f"依赖校验失败：{details}")
+    """用指定基础解释器创建 .venv 并安装运行依赖，返回 venv 解释器。
+
+    旧环境先改名保底（``.venv.bak``），新环境建成且校验通过后才删除；
+    中途失败则把旧环境放回原位，避免"旧的没了、新的也没建成"。
+    """
+    backup = VENV.with_name(VENV.name + ".bak")
+    had_old = VENV.exists()
+    if had_old:
+        if backup.exists():
+            shutil.rmtree(str(backup), ignore_errors=True)
+        shutil.move(str(VENV), str(backup))
+    try:
+        if run_step([base_python, "-m", "venv", str(VENV)], 300).returncode != 0:
+            raise RuntimeError("创建 .venv 失败")
+        runtime = venv_python()
+        install_pip(runtime)
+        run_step([runtime, "-m", "pip", "install", "-U", "pip"], 900)
+        if run_step([runtime, "-m", "pip", "install", "-U", RUNTIME_DEP], 1800).returncode != 0:
+            raise RuntimeError("安装 flet 失败")
+        ok, details = imports_ok(runtime)
+        if not ok:
+            raise RuntimeError(f"依赖校验失败：{details}")
+    except Exception:
+        with contextlib.suppress(OSError):       # 回滚：删掉半成品，把旧环境放回去
+            if VENV.exists():
+                shutil.rmtree(str(VENV), ignore_errors=True)
+            if had_old and backup.exists():
+                shutil.move(str(backup), str(VENV))
+        raise
+    if had_old and backup.exists():
+        shutil.rmtree(str(backup), ignore_errors=True)
     return runtime
 
 
@@ -465,6 +520,8 @@ def main(argv=None) -> int:
             write(f"已有 .venv 依赖不完整：{details}")
 
     write(f"未检测到可用环境（需要 Python {MIN_VERSION[0]}.{MIN_VERSION[1]}+ 与 flet）。")
+    if VENV.exists():
+        write("注意：现有 .venv 会先改名为 .venv.bak 保底，新环境校验通过后才删除。")
     question = "是否自动创建 .venv 并下载安装依赖（需联网，约 40MB+）？"
     if not ask_continue(question, assume_yes=assume_yes):
         write(
@@ -497,5 +554,5 @@ if __name__ == "__main__":
     except Exception as error:  # 顶层兜底：写入报告后以非零码退出
         write(f"\n启动失败：{error}")
         write(traceback.format_exc())
-        write(f"请查看：{REPORT}")
+        write(f"请查看：{report_path()}")
         raise SystemExit(1) from error

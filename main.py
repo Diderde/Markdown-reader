@@ -64,7 +64,7 @@ class MarkdownReaderApp:
         self.chk_source = ft.Switch(
             label="源码", value=True, scale=0.85, on_change=self._toggle_source
         )
-        self.file_picker = ft.FilePicker(on_result=self._on_file_picked)
+        self.file_picker = ft.FilePicker()   # Flet 1.0：选文件走 async pick_files，没有 on_result 回调
         page.services.append(self.file_picker)  # Flet 1.0：服务型控件挂 services（overlay 会报 Unknown control）
 
         topbar = ft.Container(
@@ -179,7 +179,9 @@ class MarkdownReaderApp:
                     ft.TextButton(
                         "复制地址",
                         icon=ft.Icons.CONTENT_COPY,
-                        on_click=lambda _e, u=urls: self._copy_lan_urls(u),
+                        # Flet 1.0：剪贴板写入交给客户端在用户手势内完成（Safari 等仅此时放行）
+                        action=ft.CopyToClipboard(urls),
+                        on_click=lambda _e: self._mark_copied(),
                     ),
                     ft.TextButton("隐藏", on_click=lambda _e: self._hide_lan_strip()),
                 ],
@@ -192,9 +194,8 @@ class MarkdownReaderApp:
             border=ft.Border(bottom=ft.BorderSide(1, BORDER)),
         )
 
-    def _copy_lan_urls(self, urls: str) -> None:
-        self.page.clipboard_clear()
-        self.page.clipboard_append(urls)
+    def _mark_copied(self) -> None:
+        """复制本身由 ft.CopyToClipboard 在客户端手势内完成，这里只更新状态提示。"""
         self.status_var.set("局域网地址已复制，手机浏览器打开即可（需同一局域网）。")
 
     def _hide_lan_strip(self) -> None:
@@ -335,16 +336,19 @@ class MarkdownReaderApp:
     # ------------------------------------------------------------ 文件导入
 
     def _pick_file(self, _e=None) -> None:
-        self.file_picker.pick_files(
+        """Flet 1.0：pick_files 是协程方法，须 await；选中文件由返回值给出（不再触发 on_result）。"""
+        self.page.run_task(self._choose_md_file)
+
+    async def _choose_md_file(self) -> None:
+        files = await self.file_picker.pick_files(
             allow_multiple=False,
             allowed_extensions=list(_MD_EXTS),
             dialog_title="选择 Markdown 文件",
         )
+        if files:
+            self._load_picked(files[0])
 
-    def _on_file_picked(self, e: ft.FilePickerResultEvent) -> None:
-        if not e.files:
-            return
-        f = e.files[0]
+    def _load_picked(self, f: ft.FilePickerFile) -> None:
         try:
             if f.size > MAX_FILE_BYTES:
                 self._show_error("导入失败：文件超过 20 MB 上限，请精简后导入")
